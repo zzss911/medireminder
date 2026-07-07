@@ -1,24 +1,21 @@
-# Python
-venv/
-__pycache__/
-*.pyc
-*.pyo
-dist/
-*.egg-info/
-
-# Database
-*.db
-*.sqlite3
-
-# Uploads
-uploads/medicines/
-
 # VAPID keys
 .vapid/
 
 # Environment
 .env
 .env.local
+.env.development.local
+.env.test.local
+.env.production.local
+!.env.example
+
+# Python
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
 
 # IDE
 .vscode/
@@ -29,5 +26,11 @@ uploads/medicines/
 Thumbs.db
 
 # Vercel
-.vercel
-.env*
+.vercel/
+
+# Local / temporary package
+github-package/
+workbuddy-memory/
+
+# Uploads / local runtime files
+uploads/
