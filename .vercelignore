@@ -1,0 +1,11 @@
+venv/
+__pycache__/
+*.pyc
+.env
+.git/
+*.db
+uploads/
+.vapid/
+app/services/__pycache__/
+app/routers/__pycache__/
+app/__pycache__/

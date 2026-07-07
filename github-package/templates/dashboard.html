@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#10B981">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <link rel="manifest" href="/static/manifest.json">
+    <title>今日服药 - Zs服药提醒</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- 顶部导航 -->
+    <header class="app-header">
+        <div class="logo">
+            <span class="icon">💊</span>
+            <span>Zs服药提醒</span>
+        </div>
+        <div class="user-menu">
+            <span>{{ user_name }}</span>
+            <a href="#" onclick="handleLogout(); return false;">退出</a>
+        </div>
+    </header>
+
+    <!-- PWA 安装提示条 -->
+    <div id="installBanner" style="display: none; background: linear-gradient(135deg, #047857, #10B981); color: white; padding: 10px 16px; display: none; align-items: center; justify-content: space-between; gap: 10px;">
+        <div style="display: flex; align-items: center; gap: 8px; font-size: 14px;">
+            <span style="font-size: 20px;">📲</span>
+            <span>安装到桌面，服药提醒更及时</span>
+        </div>
+        <div style="display: flex; gap: 8px; flex-shrink: 0;">
+            <button onclick="dismissInstall()" style="background: none; border: 1px solid rgba(255,255,255,0.5); color: white; padding: 6px 14px; border-radius: 6px; font-size: 13px; cursor: pointer;">稍后</button>
+            <button onclick="installPWA()" style="background: white; color: #047857; border: none; padding: 6px 14px; border-radius: 6px; font-weight: 600; font-size: 13px; cursor: pointer;" id="installBtn">安装</button>
+        </div>
+    </div>
+
+    <div class="container" style="padding-bottom: 80px;">
+        <!-- 统计卡片 -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value">{{ total_medicines }}</div>
+                <div class="stat-label">药品总数</div>
+            </div>
+            <div class="stat-card info">
+                <div class="stat-value">{{ active_reminders }}</div>
+                <div class="stat-label">活跃提醒</div>
+            </div>
+            <div class="stat-card warning">
+                <div class="stat-value">{{ pending_count }}</div>
+                <div class="stat-label">待服药</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ taken_count }}</div>
+                <div class="stat-label">已服用</div>
+            </div>
+        </div>
+
+        <!-- 过期提醒 -->
+        {% if expiring %}
+        <div class="alert alert-danger" style="margin-bottom: 16px;">
+            ⚠️ <strong>过期提醒：</strong>
+            {% for item in expiring %}
+                {% if item.expired %}
+                「{{ item.name }}」<strong>已过期</strong> {{ -item.days_left }} 天
+                {% else %}
+                「{{ item.name }}」还有 <strong>{{ item.days_left }}</strong> 天过期
+                {% endif %}
+                {% if not loop.last %}；{% endif %}
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- 今日待服药列表 -->
+        <div class="card">
+            <div class="card-header">
+                📋 今日待服药
+                {% if pending_count > 0 %}
+                <span style="font-size: 12px; font-weight: 400; color: var(--text-secondary); margin-left: auto;">
+                    {{ pending_count }} 项待处理
+                </span>
+                {% endif %}
+            </div>
+
+            {% if today_medications %}
+            <ul class="today-list">
+                {% for med in today_medications %}
+                <li class="today-item {% if med.status == 'taken' %}completed{% endif %}">
+                    <span class="time-badge {% if med.is_overdue and med.status == 'pending' %}overdue{% elif med.status == 'taken' %}done{% endif %}">
+                        {{ med.scheduled_time[:5] }}
+                    </span>
+                    <div class="med-info">
+                        <div class="med-name">{{ med.medicine_name }}</div>
+                        <div class="med-detail">
+                            {{ med.medicine_spec }}
+                            {% if med.dosage %} · {{ med.dosage }}{% endif %}
+                        </div>
+                    </div>
+
+                    {% if med.status == 'pending' %}
+                    <div class="action-btns">
+                        <button class="btn-action btn-taken" onclick="recordAction('{{ med.id }}', 'taken')" title="已服用">
+                            ✓ 服用
+                        </button>
+                        <button class="btn-action btn-delay" onclick="recordAction('{{ med.id }}', 'delayed')" title="延后服用">
+                            延后
+                        </button>
+                        <button class="btn-action btn-skip" onclick="recordAction('{{ med.id }}', 'skipped')" title="跳过本次">
+                            跳过
+                        </button>
+                    </div>
+                    {% elif med.status == 'taken' %}
+                    <span class="status-badge taken">已服用</span>
+                    {% elif med.status == 'delayed' %}
+                    <span class="status-badge delayed">已延后</span>
+                    {% elif med.status == 'skipped' %}
+                    <span class="status-badge skipped">已跳过</span>
+                    {% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <div class="empty-state">
+                <div class="empty-icon">🎉</div>
+                <div class="empty-text">今天没有待服药</div>
+                <div class="empty-hint">添加药品和提醒后，这里会显示每日待服药列表</div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- 添加药品 FAB -->
+    <a href="/medicines/add" class="fab">+</a>
+
+    <!-- 底部导航 -->
+    <nav class="bottom-nav">
+        <a href="/" class="active">
+            <span class="nav-icon">🏠</span>
+            <span>今日</span>
+        </a>
+        <a href="/medicines">
+            <span class="nav-icon">💊</span>
+            <span>药品</span>
+        </a>
+        <a href="/history">
+            <span class="nav-icon">📊</span>
+            <span>记录</span>
+        </a>
+        <a href="/settings">
+            <span class="nav-icon">⚙️</span>
+            <span>设置</span>
+        </a>
+    </nav>
+
+    <div id="toast" class="toast"></div>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

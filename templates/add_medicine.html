@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#10B981">
+    <title>添加药品 - Zs服药提醒</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <header class="app-header">
+        <div class="logo">
+            <span class="icon">💊</span>
+            <span>Zs服药提醒</span>
+        </div>
+        <div class="user-menu">
+            <a href="/medicines">返回</a>
+        </div>
+    </header>
+
+    <div class="container" style="padding-bottom: 80px;">
+        <div class="page-title">
+            <a href="/medicines" class="back-btn">←</a>
+            添加药品
+        </div>
+
+        <!-- Tab切换 -->
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('ai')">📷 AI拍照识别</button>
+            <button class="tab-btn" onclick="switchTab('manual')">✏️ 手动输入</button>
+        </div>
+
+        <!-- AI拍照上传 -->
+        <div id="tab-ai">
+            <div class="upload-zone" id="uploadZone">
+                <div class="upload-icon">📸</div>
+                <div class="upload-text">点击或拖拽药品照片到这里</div>
+                <div class="upload-hint">支持 JPG、PNG、WEBP 格式，不超过 10MB</div>
+                <input type="file" id="fileInput" accept="image/*" capture="environment">
+            </div>
+
+            <div class="loading" id="uploadLoading">
+                <div class="spinner"></div>
+                <p>AI正在识别药品信息...</p>
+            </div>
+
+            <div class="upload-preview" id="uploadPreview">
+                <img id="previewImg" src="" alt="预览">
+            </div>
+
+            <!-- OCR 识别结果 -->
+            <div class="ocr-result card" id="ocrResult">
+                <div class="card-header">🤖 AI识别结果 - 请确认修改</div>
+
+                <div class="ocr-raw" id="ocr_raw_text"></div>
+
+                <form id="confirmForm">
+                    <div class="form-group">
+                        <label class="form-label">药品名称 *</label>
+                        <input type="text" id="ocr_name" class="form-input" placeholder="药品名称" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">规格</label>
+                        <input type="text" id="ocr_specification" class="form-input" placeholder="如：10mg*30片">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">有效期</label>
+                        <input type="date" id="ocr_expiry_date" class="form-input">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">说明</label>
+                        <textarea id="ocr_description" class="form-input" placeholder="药品说明文字" rows="3"></textarea>
+                    </div>
+
+                    <input type="hidden" id="ocr_image_path">
+
+                    <button type="submit" class="btn btn-primary btn-lg btn-block">
+                        ✅ 确认识别结果并添加药品
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- 手动输入 -->
+        <div id="tab-manual" style="display: none;">
+            <div class="card">
+                <div class="card-header">✏️ 手动输入药品信息</div>
+                <form id="manualForm">
+                    <div class="form-group">
+                        <label class="form-label">药品名称 *</label>
+                        <input type="text" id="manual_name" class="form-input" placeholder="请输入药品名称" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">规格</label>
+                        <input type="text" id="manual_specification" class="form-input" placeholder="如：10mg*30片、100ml/瓶">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">有效期</label>
+                        <input type="date" id="manual_expiry_date" class="form-input">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">说明</label>
+                        <textarea id="manual_description" class="form-input" placeholder="用法用量、注意事项等" rows="3"></textarea>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-lg btn-block">添加药品</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script>
+        // Tab切换
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById('tab-ai').style.display = tab === 'ai' ? '' : 'none';
+            document.getElementById('tab-manual').style.display = tab === 'manual' ? '' : 'none';
+        }
+    </script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

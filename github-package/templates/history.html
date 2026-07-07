@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#10B981">
+    <title>服药记录 - Zs服药提醒</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <header class="app-header">
+        <div class="logo">
+            <span class="icon">💊</span>
+            <span>Zs服药提醒</span>
+        </div>
+        <div class="user-menu">
+            <a href="#" onclick="handleLogout(); return false;">退出</a>
+        </div>
+    </header>
+
+    <div class="container" style="padding-bottom: 80px;">
+        <div class="page-title">📊 服药记录</div>
+
+        <!-- 日期选择 -->
+        <div class="form-group">
+            <input type="date" id="datePicker" class="form-input">
+        </div>
+
+        <!-- 记录列表 -->
+        <div class="card">
+            <div id="historyContainer">
+                <div class="loading show">
+                    <div class="spinner"></div>
+                    <p>加载中...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <nav class="bottom-nav">
+        <a href="/">
+            <span class="nav-icon">🏠</span>
+            <span>今日</span>
+        </a>
+        <a href="/medicines">
+            <span class="nav-icon">💊</span>
+            <span>药品</span>
+        </a>
+        <a href="/history" class="active">
+            <span class="nav-icon">📊</span>
+            <span>记录</span>
+        </a>
+        <a href="/settings">
+            <span class="nav-icon">⚙️</span>
+            <span>设置</span>
+        </a>
+    </nav>
+
+    <div id="toast" class="toast"></div>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

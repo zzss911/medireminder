@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#10B981">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <title>登录 - Zs服药提醒</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="auth-page">
+    <div class="auth-card">
+        <div class="auth-logo">💊</div>
+        <div class="auth-title">Zs服药提醒智能体</div>
+        <div class="auth-subtitle">AI驱动的智能服药管理助手</div>
+
+        <form id="loginForm">
+            <div class="form-group">
+                <label class="form-label" for="email">邮箱</label>
+                <input type="email" id="email" class="form-input" placeholder="请输入邮箱地址" required autocomplete="email">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="password">密码</label>
+                <input type="password" id="password" class="form-input" placeholder="请输入密码" required autocomplete="current-password">
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-lg btn-block">登录</button>
+        </form>
+
+        <div class="auth-link">
+            还没有账号？<a href="/register">立即注册</a>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
