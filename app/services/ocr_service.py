@@ -207,6 +207,8 @@ class VisionAPIBackend(AIBackend):
                 return await self._call_claude(image_data, mime_type)
             elif self.provider == "openai":
                 return await self._call_openai(image_data, mime_type)
+            elif self.provider == "qianwen":
+                return await self._call_qianwen(image_data, mime_type)
             else:
                 return {"name": "", "specification": "", "expiry_date": "",
                         "description": "", "raw_text": f"未知AI提供商: {self.provider}",
@@ -310,8 +312,20 @@ class VisionAPIBackend(AIBackend):
 
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.post(url, json=payload, headers=headers)
-            resp.raise_for_status()
+            # 把 HTTP 错误正文也带回
+            if resp.status_code >= 400:
+                err_body = resp.text[:300]
+                return {"name": "", "specification": "", "expiry_date": "",
+                        "description": "", "raw_text": f"HTTP {resp.status_code}: {err_body}",
+                        "backend": self.provider, "error": f"HTTP {resp.status_code}"}
             data = resp.json()
+            # 千问错误返回格式: {"error": {"code": "...", "message": "..."}}
+            if "error" in data and "choices" not in data:
+                err_msg = data["error"].get("message", "未知错误")
+                err_code = data["error"].get("code", "")
+                return {"name": "", "specification": "", "expiry_date": "",
+                        "description": "", "raw_text": f"[{err_code}] {err_msg}",
+                        "backend": self.provider, "error": err_msg}
             text = data["choices"][0]["message"]["content"]
 
         return self._parse_json_response(text)
@@ -371,13 +385,21 @@ class OCRService:
             result = await self._vision_backend.recognize(image_path)
             if result.get("name"):
                 return result
+            # 识别失败，附带错误信息
+            if "error" in result:
+                raise Exception(f"AI 识别失败: {result['error']}")
+            raise Exception(f"AI 返回空结果: {result.get('raw_text', '')[:200]}")
         except Exception as e:
-            logger.warning(f"Vision API failed, falling back to EasyOCR: {e}")
+            logger.warning(f"Vision API failed: {e}")
+            # 不再静默回退到 EasyOCR（Vercel 上没装），把错误抛给上层
+            raise
 
-        # 回退到 EasyOCR
-        result = await self._easyocr.recognize(image_path)
-        result["backend"] = "easyocr (fallback)"
-        return result
+    async def _call_qianwen_with_key_check(self, image_path: str) -> dict:
+        """便利方法 - 用于直接调用的临时调试"""
+        if not AI_API_KEY:
+            raise Exception("未配置千问 API Key (AI_API_KEY 环境变量)")
+        return await self._vision_backend.recognize(image_path)
 
 
 ocr_service = OCRService()
+
