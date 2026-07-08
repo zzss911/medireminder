@@ -230,6 +230,15 @@
 
         // 页面加载时检查推送状态
         document.addEventListener('DOMContentLoaded', async () => {
+            // 注册 Service Worker（推送必需）
+            if ('serviceWorker' in navigator) {
+                try {
+                    await navigator.serviceWorker.register('/static/js/sw.js');
+                } catch(e) {
+                    console.log('SW register failed:', e.message);
+                }
+            }
+
             if ('serviceWorker' in navigator) {
                 try {
                     const registration = await navigator.serviceWorker.ready;
@@ -249,5 +258,6 @@
             }
         });
     </script>
+    <script src="/static/js/app.js"></script>
 </body>
 </html>
