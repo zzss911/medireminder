@@ -1,0 +1,12 @@
+name: MediReminder - Generate Daily Records
+on:
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          curl -sf -X POST "${{ secrets.APP_BASE_URL }}/api/cron/generate-records" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"

@@ -1,0 +1,12 @@
+name: MediReminder - Check Expiry
+on:
+  schedule:
+    - cron: "0 8 * * *"
+  workflow_dispatch:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          curl -sf -X POST "${{ secrets.APP_BASE_URL }}/api/cron/check-expiry" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"

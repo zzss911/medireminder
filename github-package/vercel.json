@@ -10,19 +10,5 @@
       "src": "/(.*)",
       "dest": "api/index.py"
     }
-  ],
-  "crons": [
-    {
-      "path": "/api/cron/generate-records",
-      "schedule": "5 0 * * *"
-    },
-    {
-      "path": "/api/cron/send-reminders",
-      "schedule": "* * * * *"
-    },
-    {
-      "path": "/api/cron/check-expiry",
-      "schedule": "0 8 * * *"
-    }
   ]
 }

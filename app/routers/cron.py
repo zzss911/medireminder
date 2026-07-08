@@ -1,15 +1,12 @@
-"""Vercel Cron Jobs — 替代 APScheduler 定时任务
+"""Cron 定时任务 — 由 GitHub Actions 外部调用触发
 
-部署后在 vercel.json 的 crons 配置：
-[
-  { "path": "/api/cron/generate-records", "schedule": "5 0 * * *" },
-  { "path": "/api/cron/send-reminders", "schedule": "* * * * *" },
-  { "path": "/api/cron/check-expiry", "schedule": "0 8 * * *" }
-]
+调用方需携带 Authorization: Bearer <CRON_SECRET>
+CRON_SECRET 通过环境变量配置
 """
+import os
 import logging
 from datetime import datetime, date, timedelta
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 
 from ..supabase_client import table
 from ..services.notification_service import notification_service
@@ -18,11 +15,25 @@ from ..services.push_service import push_service
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/cron", tags=["cron"])
 
+CRON_SECRET = os.environ.get("CRON_SECRET", "")
+
+# 提醒扫描窗口（分钟）：查找 scheduled_time 在当前时间 ± 范围内且未推送的记录
+REMINDER_WINDOW_MINUTES = 5
+
+
+def _check_secret(request: Request):
+    """校验 CRON_SECRET — GitHub Actions 调用时携带"""
+    if not CRON_SECRET:
+        return  # 未配置则不校验
+    header = request.headers.get("Authorization", "")
+    if header != f"Bearer {CRON_SECRET}":
+        raise HTTPException(status_code=401, detail="unauthorized")
+
 
 @router.post("/generate-records")
 async def cron_generate_records(request: Request):
     """每日凌晨生成当天服药记录"""
-    # Vercel Cron requests are internal, no auth needed
+    _check_secret(request)
 
     today_str = date.today().strftime("%Y-%m-%d")
     weekday = str(date.today().weekday() + 1)
@@ -42,8 +53,15 @@ async def cron_generate_records(request: Request):
         if not should_remind:
             continue
 
-        # 检查是否已有今天的记录
-        existing = table("medication_records").select("id").eq("user_id", rem["user_id"]).eq("medicine_id", rem["medicine_id"]).eq("scheduled_date", today_str).execute()
+        # 检查是否已有今天的记录（不含已取消/延后的）
+        existing = (
+            table("medication_records")
+            .select("id")
+            .eq("user_id", rem["user_id"])
+            .eq("medicine_id", rem["medicine_id"])
+            .eq("scheduled_date", today_str)
+            .execute()
+        )
         if existing.data:
             continue
 
@@ -66,48 +84,95 @@ async def cron_generate_records(request: Request):
 
 @router.post("/send-reminders")
 async def cron_send_reminders(request: Request):
-    """每分钟检查并发送推送提醒"""
-    # Vercel Cron requests are internal, no auth needed
+    """扫描最近 N 分钟内的待提醒记录并推送（防重复）"""
+    _check_secret(request)
 
     today_str = date.today().strftime("%Y-%m-%d")
-    now = datetime.now()
-    now_str = now.strftime("%H:%M")
+    now = datetime.utcnow()
 
-    try:
-        records = table("medication_records").select("*").eq("scheduled_date", today_str).eq("scheduled_time", now_str).eq("status", "pending").execute()
-    except Exception as e:
-        return {"error": str(e)}
+    # 生成时间窗口：当前时刻 ± REMINDER_WINDOW_MINUTES 的所有分钟
+    time_slots = []
+    for offset in range(-REMINDER_WINDOW_MINUTES, REMINDER_WINDOW_MINUTES + 1):
+        t = now + timedelta(minutes=offset)
+        time_slots.append(t.strftime("%H:%M"))
 
     sent = 0
-    for rec in (records.data or []):
+    total_pending = 0
+
+    for t in time_slots:
         try:
-            med = table("medicines").select("name,specification").eq("id", rec["medicine_id"]).execute()
-            med_name = med.data[0]["name"] if med.data else "药品"
-            med_spec = med.data[0].get("specification", "") if med.data else ""
-
-            body = f"该服用 {med_name} 了"
-            if med_spec:
-                body += f"（{med_spec}）"
-
-            result = await push_service.send_notification(
-                user_id=rec["user_id"],
-                title="💊 服药提醒",
-                body=body,
-                tag=f"med-{rec['id']}",
-                url="/"
+            records = (
+                table("medication_records")
+                .select("*")
+                .eq("scheduled_date", today_str)
+                .eq("scheduled_time", t)
+                .eq("status", "pending")
+                .execute()
             )
-            if result.get("success", 0) > 0:
-                sent += 1
-        except Exception as e:
-            logger.warning(f"Send reminder failed for record {rec.get('id')}: {e}")
+        except Exception:
+            continue
 
-    return {"ok": True, "pending": len(records.data or []), "sent": sent, "time": now_str}
+        for rec in (records.data or []):
+            total_pending += 1
+
+            # 防重复：检查是否 5 分钟内已推送过（用 actual_time + note 做简易标记）
+            notified = rec.get("note") or ""
+            if "auto_notified:" in notified:
+                try:
+                    last_time = datetime.fromisoformat(notified.split("auto_notified:")[1].strip())
+                    if (now - last_time).total_seconds() < 300:  # 5分钟内
+                        continue
+                except Exception:
+                    pass
+
+            try:
+                med = (
+                    table("medicines")
+                    .select("name,specification")
+                    .eq("id", rec["medicine_id"])
+                    .execute()
+                )
+                med_name = med.data[0]["name"] if med.data else "药品"
+                med_spec = med.data[0].get("specification", "") if med.data else ""
+
+                body = f"该服用 {med_name} 了"
+                if med_spec:
+                    body += f"（{med_spec}）"
+
+                result = await push_service.send_notification(
+                    user_id=rec["user_id"],
+                    title="💊 服药提醒",
+                    body=body,
+                    tag=f"med-{rec['id']}",
+                    url="/",
+                )
+
+                # 标记已推送（写 note 字段防重复）
+                sent_count = result.get("success", 0)
+                if sent_count > 0:
+                    sent += 1
+                    try:
+                        table("medication_records").update({
+                            "note": f"auto_notified:{now.isoformat()}",
+                        }).eq("id", rec["id"]).execute()
+                    except Exception:
+                        pass
+            except Exception as e:
+                logger.warning(f"Send reminder failed for record {rec.get('id')}: {e}")
+
+    return {
+        "ok": True,
+        "pending": total_pending,
+        "sent": sent,
+        "window_minutes": REMINDER_WINDOW_MINUTES,
+        "time": now.strftime("%H:%M"),
+    }
 
 
 @router.post("/check-expiry")
 async def cron_check_expiry(request: Request):
     """每日检查过期药品并推送警告"""
-    # Vercel Cron requests are internal, no auth needed
+    _check_secret(request)
 
     today = date.today()
     warned = 0

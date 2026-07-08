@@ -35,3 +35,6 @@ AI_API_KEY = os.environ.get("AI_API_KEY", "")
 AI_API_URL = os.environ.get("AI_API_URL", "")
 QWEN_API_URL = os.environ.get("QWEN_API_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
 QWEN_MODEL = os.environ.get("QWEN_MODEL", "qwen-vl-plus")  # qwen-vl-plus / qwen-vl-max
+
+# Cron 密钥（GitHub Actions 调用时校验）
+CRON_SECRET = os.environ.get("CRON_SECRET", "")
