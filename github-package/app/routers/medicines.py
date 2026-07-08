@@ -1,6 +1,7 @@
 """药品管理 API - 对接 Supabase"""
 import os
 import uuid
+import logging
 from datetime import datetime, date, timedelta
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Request
@@ -11,6 +12,7 @@ from ..config import UPLOAD_DIR, ALLOWED_EXTENSIONS, MAX_UPLOAD_SIZE
 from ..supabase_client import table, storage
 from ..services.ocr_service import ocr_service
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/medicines", tags=["medicines"])
 
 
@@ -82,13 +84,31 @@ async def upload_and_recognize(request: Request, file: UploadFile = File(...)):
     try:
         result = await ocr_service.recognize(local_path)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"识别失败: {str(e)}")
-    finally:
-        # 识别完成后删除临时图片
+        # 识别失败也清理临时文件
         try:
             os.unlink(local_path)
         except OSError:
             pass
+        raise HTTPException(status_code=500, detail=f"识别失败: {str(e)}")
+
+    # 上传图片到 Supabase Storage
+    image_path = ""
+    try:
+        object_name = f"{user_id}/{filename}"
+        storage().from_("medicines").upload(
+            path=object_name,
+            file=content,
+            file_options={"content-type": f"image/{'jpeg' if ext == 'jpg' else ext}"}
+        )
+        image_path = storage().from_("medicines").get_public_url(object_name)
+    except Exception as e:
+        logger.warning(f"Supabase upload failed: {e}")
+
+    # 清理临时图片
+    try:
+        os.unlink(local_path)
+    except OSError:
+        pass
 
     return {
         "name": result.get("name", ""),
@@ -96,6 +116,7 @@ async def upload_and_recognize(request: Request, file: UploadFile = File(...)):
         "expiry_date": result.get("expiry_date", ""),
         "description": result.get("description", ""),
         "raw_text": result.get("raw_text", ""),
+        "image_path": image_path,
     }
 
 

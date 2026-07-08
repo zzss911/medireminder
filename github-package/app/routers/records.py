@@ -1,5 +1,5 @@
 """服药记录 API - 对接 Supabase"""
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from fastapi import APIRouter, HTTPException, Request, Query
 from pydantic import BaseModel
 
@@ -14,6 +14,7 @@ class RecordUpdate(BaseModel):
     status: str
     actual_time: str = None
     note: str = None
+    delay_minutes: int = None  # 延后分钟数 (10/30/60)
 
 
 @router.get("/today")
@@ -66,20 +67,50 @@ async def record_action(request: Request, record_id: str, data: RecordUpdate):
     actual_time = data.actual_time or datetime.now().strftime("%H:%M")
 
     try:
-        result = table("medication_records").update({
+        # 先获取原记录信息（用于延后时创建新记录）
+        orig = table("medication_records").select("*").eq("id", record_id).eq("user_id", user_id).execute()
+        if not orig.data:
+            raise HTTPException(status_code=404, detail="记录不存在")
+        orig_rec = orig.data[0]
+
+        # 更新当前记录
+        table("medication_records").update({
             "status": data.status,
             "actual_time": actual_time,
             "note": data.note or "",
         }).eq("id", record_id).eq("user_id", user_id).execute()
 
-        if not result.data:
-            raise HTTPException(status_code=404, detail="记录不存在")
+        # 延后：按指定分钟生成新的 pending 记录
+        new_record_id = None
+        if data.status == "delayed":
+            delay = data.delay_minutes or 30
+            now = datetime.now()
+            future = now + timedelta(minutes=delay)
+            new_time = future.strftime("%H:%M")
+            new_date = future.strftime("%Y-%m-%d")
+
+            try:
+                new_rec = table("medication_records").insert({
+                    "user_id": user_id,
+                    "medicine_id": orig_rec["medicine_id"],
+                    "reminder_id": orig_rec.get("reminder_id"),
+                    "scheduled_date": new_date,
+                    "scheduled_time": new_time,
+                    "status": "pending",
+                    "created_at": datetime.utcnow().isoformat(),
+                }).execute()
+                if new_rec.data:
+                    new_record_id = new_rec.data[0]["id"]
+            except Exception as e:
+                print(f"Failed to create delay record: {e}")
 
         return {
             "id": record_id,
             "status": data.status,
             "actual_time": actual_time,
             "message": "记录已更新",
+            "delay_record_id": new_record_id,
+            "delay_time": f"{data.delay_minutes or 30}分钟" if data.status == "delayed" else None,
         }
     except HTTPException:
         raise

@@ -48,7 +48,7 @@ def create_app(mount_static: bool = True) -> FastAPI:
             pass  # Vercel 上 uploads 目录可能不存在
 
     # 注册路由
-    from .routers import auth, medicines, reminders, records, pages, push, settings
+    from .routers import auth, medicines, reminders, records, pages, push, settings, cron
 
     app.include_router(auth.router)
     app.include_router(medicines.router)
@@ -57,6 +57,7 @@ def create_app(mount_static: bool = True) -> FastAPI:
     app.include_router(push.router)
     app.include_router(settings.router)
     app.include_router(pages.router)
+    app.include_router(cron.router)
 
     return app
 

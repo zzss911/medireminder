@@ -174,7 +174,7 @@ function setupUpload() {
             document.getElementById('ocr_description').value = result.description || '';
             // 只显示药品描述（不带 JSON）
             document.getElementById('ocr_raw_text').textContent = result.description || result.raw_text || '';
-            document.getElementById('ocr_image_path').value = ''; // Will be set by backend
+            document.getElementById('ocr_image_path').value = result.image_path || '';
 
             ocrResult.classList.add('show');
         } catch (e) {
@@ -191,23 +191,8 @@ async function confirmMedicine(e) {
     btn.disabled = true;
     btn.textContent = '保存中...';
 
-    // 需要先上传图片获取路径
-    const fileInput = document.getElementById('fileInput');
-    let imagePath = '';
-
-    if (fileInput && fileInput.files[0]) {
-        const formData = new FormData();
-        formData.append('file', fileInput.files[0]);
-        try {
-            const res = await fetch('/api/medicines/upload-recognize', {
-                method: 'POST',
-                body: formData,
-            });
-            // 我们需要获取图片路径，但OCR API不返回它
-            // 通过直接构建路径来绕过
-            imagePath = '';
-        } catch (e) {}
-    }
+    // 直接使用 OCR 返回的 image_path（已由后端上传到 Supabase）
+    const imagePath = document.getElementById('ocr_image_path').value || '';
 
     const data = {
         name: document.getElementById('ocr_name').value.trim(),
@@ -277,9 +262,19 @@ async function recordAction(recordId, action) {
     const now = new Date();
     const time = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
 
+    let delayMinutes = null;
+    if (action === 'delayed') {
+        // 弹出选择延后时长
+        const choice = prompt('延后多久？\n输入分钟数（10 / 30 / 60）', '30');
+        const n = parseInt(choice);
+        if (!n || n <= 0) return;
+        delayMinutes = n;
+    }
+
     const data = {
         status: action,
         actual_time: time,
+        delay_minutes: delayMinutes,
     };
 
     try {
@@ -553,8 +548,10 @@ document.addEventListener('DOMContentLoaded', () => {
     setupUpload();
     setupTabs();
     setupDatePicker();
-    requestNotificationPermission();
-    autoSubscribePush();
+    // 不再自动弹出通知权限，改为用户主动点击设置页「开启推送」时申请
+    // requestNotificationPermission();
+    // 也不在加载时自动订阅推送
+    // autoSubscribePush();
     startNotificationChecker();
 
     // 绑定表单事件

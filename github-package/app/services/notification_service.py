@@ -5,14 +5,24 @@ from ..supabase_client import table
 
 
 class NotificationService:
-    EXPIRY_WARN_DAYS = 30
+
+    async def _get_user_expiry_warn_days(self, user_id: str) -> int:
+        """读取用户设置的过期提醒天数"""
+        try:
+            result = table("user_settings").select("expiry_warn_days").eq("user_id", user_id).execute()
+            if result.data:
+                return result.data[0].get("expiry_warn_days", 30)
+        except Exception:
+            pass
+        return 30
 
     async def get_expiring_medicines(self, user_id: str) -> list:
         """获取即将过期的药品列表"""
         try:
             result = table("medicines").select("*").eq("user_id", user_id).execute()
             today_date = date.today()
-            warn_date = today_date + timedelta(days=self.EXPIRY_WARN_DAYS)
+            warn_days = await self._get_user_expiry_warn_days(user_id)
+            warn_date = today_date + timedelta(days=warn_days)
             expiring = []
 
             for m in (result.data or []):
