@@ -1,14 +1,28 @@
 """页面路由 - 服务端渲染（对接 Supabase）"""
+import os
 from datetime import date, timedelta, datetime
 
 from fastapi import APIRouter, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 
 from ..auth import get_optional_user, require_user
 from ..supabase_client import table
 from ..templates import render
 
 router = APIRouter()
+
+
+@router.get("/sw.js")
+async def service_worker(request: Request):
+    """根路径 Service Worker — 确保 scope 覆盖整个站点"""
+    sw_path = os.path.join(os.path.dirname(__file__), "..", "..", "static", "js", "sw.js")
+    with open(sw_path, "r", encoding="utf-8") as f:
+        content = f.read()
+    return Response(
+        content=content,
+        media_type="application/javascript",
+        headers={"Service-Worker-Allowed": "/"},
+    )
 
 
 @router.get("/login")

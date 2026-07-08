@@ -138,47 +138,88 @@
         }
 
         async function subscribePush() {
+            const btn = document.getElementById('pushBtn');
+            const status = document.getElementById('pushStatusText');
+
+            // 按钮立即反馈
+            btn.disabled = true;
+            btn.textContent = '开启中...';
+            status.textContent = '正在请求权限...';
+
+            // 1) 检查浏览器支持
             if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+                status.textContent = '浏览器不支持推送';
+                btn.disabled = true;
+                btn.textContent = '不支持';
                 showToast('您的浏览器不支持推送通知', 'error');
                 return;
             }
 
+            // 2) 请求通知权限
             let permission = Notification.permission;
             if (permission === 'default') {
                 permission = await Notification.requestPermission();
             }
             if (permission !== 'granted') {
-                showToast('需要允许通知权限才能接收推送', 'error');
+                status.textContent = '未授权（请在浏览器设置中允许通知）';
+                btn.disabled = false;
+                btn.textContent = '重新开启';
+                showToast('请在浏览器设置中允许通知权限', 'error');
                 return;
             }
 
+            // 3) 注册 Service Worker（根路径 scope）
+            status.textContent = '正在注册服务...';
+            let registration;
             try {
-                const registration = await navigator.serviceWorker.ready;
+                registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+                await registration.update(); // 确保激活最新版本
+            } catch (e) {
+                status.textContent = 'Service Worker 注册失败';
+                btn.disabled = false;
+                btn.textContent = '重试';
+                showToast('SW 注册失败: ' + e.message, 'error');
+                return;
+            }
 
-                // 检查是否已订阅
-                let subscription = await registration.pushManager.getSubscription();
-                if (!subscription) {
-                    // 获取 VAPID 公钥
-                    const vapidResp = await fetch('/api/push/vapid-public-key');
-                    if (!vapidResp.ok) {
-                        const t = await vapidResp.text();
-                        showToast('获取 VAPID 失败: ' + t.substring(0, 100), 'error');
-                        return;
-                    }
-                    const vapidData = await vapidResp.json();
-                    if (!vapidData.publicKey) {
-                        showToast('VAPID 公钥未配置', 'error');
-                        return;
-                    }
-
-                    // 订阅
-                    subscription = await registration.pushManager.subscribe({
-                        userVisibleOnly: true,
-                        applicationServerKey: urlBase64ToUint8Array(vapidData.publicKey),
-                    });
+            // 4) 订阅 push
+            status.textContent = '正在订阅推送...';
+            let subscription;
+            try {
+                // 先获取 VAPID 公钥
+                const vapidResp = await fetch('/api/push/vapid-public-key');
+                if (!vapidResp.ok) {
+                    const t = await vapidResp.text();
+                    status.textContent = '获取密钥失败';
+                    btn.disabled = false;
+                    btn.textContent = '重试';
+                    showToast('获取 VAPID 失败: ' + t.substring(0, 80), 'error');
+                    return;
+                }
+                const vapidData = await vapidResp.json();
+                if (!vapidData.publicKey) {
+                    status.textContent = 'VAPID 未配置';
+                    btn.disabled = false;
+                    btn.textContent = '重试';
+                    showToast('VAPID 公钥缺失，请在 Vercel 添加 VAPID_PUBLIC_KEY 环境变量', 'error');
+                    return;
                 }
 
-                // 发送到后端
+                subscription = await registration.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: urlBase64ToUint8Array(vapidData.publicKey),
+                });
+            } catch (e) {
+                status.textContent = '订阅失败';
+                btn.disabled = false;
+                btn.textContent = '重试';
+                showToast('Push 订阅失败: ' + e.message, 'error');
+                return;
+            }
+
+            // 5) 保存到后端
+            status.textContent = '正在保存...';
+            try {
                 const subData = subscription.toJSON();
                 const saveResp = await fetch('/api/push/subscribe', {
                     method: 'POST',
@@ -187,18 +228,25 @@
                 });
                 if (!saveResp.ok) {
                     const t = await saveResp.text();
-                    showToast('保存订阅失败: ' + t.substring(0, 100), 'error');
+                    status.textContent = '保存失败';
+                    btn.disabled = false;
+                    btn.textContent = '重试';
+                    showToast('保存订阅失败: ' + t.substring(0, 80), 'error');
                     return;
                 }
-
-                document.getElementById('pushStatusText').textContent = '已开启';
-                document.getElementById('pushBtn').textContent = '已开启';
-                document.getElementById('pushBtn').disabled = true;
-                showToast('推送通知已开启！');
             } catch (e) {
-                console.error('Subscribe error:', e);
-                showToast('订阅推送失败: ' + e.message, 'error');
+                status.textContent = '保存失败';
+                btn.disabled = false;
+                btn.textContent = '重试';
+                showToast('网络错误: ' + e.message, 'error');
+                return;
             }
+
+            // 6) 成功
+            status.textContent = '已开启 ✅';
+            btn.textContent = '已开启';
+            btn.disabled = true;
+            showToast('推送通知已开启！');
         }
 
         async function testPush() {
@@ -230,10 +278,10 @@
 
         // 页面加载时检查推送状态
         document.addEventListener('DOMContentLoaded', async () => {
-            // 注册 Service Worker（推送必需）
+            // 注册 Service Worker（根路径 scope，与 subscribePush 保持一致）
             if ('serviceWorker' in navigator) {
                 try {
-                    await navigator.serviceWorker.register('/static/js/sw.js');
+                    await navigator.serviceWorker.register('/sw.js', { scope: '/' });
                 } catch(e) {
                     console.log('SW register failed:', e.message);
                 }

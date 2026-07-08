@@ -579,7 +579,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// ====== Service Worker 注册 ======
+// ====== Service Worker 注册（根路径，scope 覆盖全站）======
 if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/static/js/sw.js').catch(() => {});
+    navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch((e) => {
+        console.log('SW registration failed:', e.message);
+    });
 }
