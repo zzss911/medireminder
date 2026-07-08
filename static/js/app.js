@@ -167,12 +167,13 @@ function setupUpload() {
             }
 
             const result = await res.json();
-            
+
             document.getElementById('ocr_name').value = result.name || '';
             document.getElementById('ocr_specification').value = result.specification || '';
             document.getElementById('ocr_expiry_date').value = result.expiry_date || '';
             document.getElementById('ocr_description').value = result.description || '';
-            document.getElementById('ocr_raw_text').textContent = result.raw_text || '';
+            // 只显示药品描述（不带 JSON）
+            document.getElementById('ocr_raw_text').textContent = result.description || result.raw_text || '';
             document.getElementById('ocr_image_path').value = ''; // Will be set by backend
 
             ocrResult.classList.add('show');
