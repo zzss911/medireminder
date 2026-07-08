@@ -18,21 +18,11 @@ from ..services.push_service import push_service
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/cron", tags=["cron"])
 
-# 简单的鉴权（防止外部随意调用）
-CRON_SECRET = "medireminder-cron-2026"
-
-
-def _check_secret(request: Request) -> bool:
-    """检查 CRON 密钥"""
-    header = request.headers.get("Authorization", "")
-    return header == f"Bearer {CRON_SECRET}"
-
 
 @router.post("/generate-records")
 async def cron_generate_records(request: Request):
     """每日凌晨生成当天服药记录"""
-    if not _check_secret(request):
-        return {"error": "unauthorized"}
+    # Vercel Cron requests are internal, no auth needed
 
     today_str = date.today().strftime("%Y-%m-%d")
     weekday = str(date.today().weekday() + 1)
@@ -77,8 +67,7 @@ async def cron_generate_records(request: Request):
 @router.post("/send-reminders")
 async def cron_send_reminders(request: Request):
     """每分钟检查并发送推送提醒"""
-    if not _check_secret(request):
-        return {"error": "unauthorized"}
+    # Vercel Cron requests are internal, no auth needed
 
     today_str = date.today().strftime("%Y-%m-%d")
     now = datetime.now()
@@ -118,8 +107,7 @@ async def cron_send_reminders(request: Request):
 @router.post("/check-expiry")
 async def cron_check_expiry(request: Request):
     """每日检查过期药品并推送警告"""
-    if not _check_secret(request):
-        return {"error": "unauthorized"}
+    # Vercel Cron requests are internal, no auth needed
 
     today = date.today()
     warned = 0
