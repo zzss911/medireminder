@@ -31,7 +31,7 @@
 
         <!-- 药品详情 -->
         <div class="card">
-            <table class="detail-table">
+            <table class="detail-table" id="detailTable">
                 <tr>
                     <td>药品名称</td>
                     <td><strong>{{ medicine.name }}</strong></td>
@@ -55,6 +55,21 @@
                     <td>{{ medicine.description or '暂无说明' }}</td>
                 </tr>
             </table>
+        </div>
+
+        <!-- 编辑表单（默认隐藏） -->
+        <div class="card" id="editCard" style="display:none;">
+            <div class="card-header">✏️ 编辑药品</div>
+            <table class="detail-table">
+                <tr><td>药品名称</td><td><input type="text" id="edit_name" class="form-input" value="{{ medicine.name }}" required></td></tr>
+                <tr><td>规格</td><td><input type="text" id="edit_specification" class="form-input" value="{{ medicine.specification or '' }}" placeholder="如 10mg*30片"></td></tr>
+                <tr><td>有效期</td><td><input type="date" id="edit_expiry_date" class="form-input" value="{{ medicine.expiry_date or '' }}"></td></tr>
+                <tr><td>说明</td><td><textarea id="edit_description" class="form-input" rows="2" placeholder="用法用量等">{{ medicine.description or '' }}</textarea></td></tr>
+            </table>
+            <div style="display:flex;gap:8px;margin-top:12px;">
+                <button class="btn btn-primary btn-sm" onclick="saveEdit()">💾 保存</button>
+                <button class="btn btn-outline btn-sm" onclick="cancelEdit()">取消</button>
+            </div>
         </div>
 
         <!-- 服药提醒 -->
@@ -99,6 +114,7 @@
 
         <!-- 操作 -->
         <div style="display: flex; gap: 10px;">
+            <button class="btn btn-primary btn-block" onclick="showEdit()">✏️ 编辑药品</button>
             <button class="btn btn-danger btn-block" onclick="deleteMedicine('{{ medicine.id }}')">删除药品</button>
         </div>
     </div>
@@ -147,6 +163,36 @@
     <div id="toast" class="toast"></div>
 
     <script>
+        // 编辑药品
+        function showEdit() {
+            document.getElementById('detailTable').parentElement.style.display = 'none';
+            document.getElementById('editCard').style.display = '';
+        }
+        function cancelEdit() {
+            document.getElementById('detailTable').parentElement.style.display = '';
+            document.getElementById('editCard').style.display = 'none';
+        }
+        async function saveEdit() {
+            const data = {
+                name: document.getElementById('edit_name').value.trim(),
+                specification: document.getElementById('edit_specification').value.trim(),
+                expiry_date: document.getElementById('edit_expiry_date').value,
+                description: document.getElementById('edit_description').value.trim(),
+            };
+            if (!data.name) { showToast('药品名称不能为空', 'error'); return; }
+            try {
+                const res = await fetch('/api/medicines/{{ medicine.id }}', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data),
+                });
+                if (res.status === 401) { window.location.href = '/login'; return; }
+                if (!res.ok) { const err = await res.json().catch(()=>({})); throw new Error(err.detail||'保存失败'); }
+                showToast('保存成功！');
+                setTimeout(() => location.reload(), 500);
+            } catch(e) { showToast(e.message, 'error'); }
+        }
+
         document.getElementById('reminder_frequency').addEventListener('change', function() {
             document.getElementById('daysGroup').style.display = this.value === 'weekly' ? '' : 'none';
         });

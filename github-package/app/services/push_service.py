@@ -53,10 +53,17 @@ def _generate_vapid_keys():
 
 
 def _load_vapid_keys():
-    """加载 VAPID 密钥，不存在则生成"""
+    """加载 VAPID 密钥：优先环境变量，其次文件，最后自动生成"""
+    # 1) 环境变量（Vercel 部署用，固定密钥避免每次冷启变化）
+    env_private = os.environ.get("VAPID_PRIVATE_KEY", "")
+    env_public = os.environ.get("VAPID_PUBLIC_KEY", "")
+    if env_private and env_public:
+        private_key = env_private.replace("\\n", "\n")
+        return private_key, env_public
+
+    # 2) 本地文件缓存
     private_path = os.path.join(VAPID_DIR, "private_key.pem")
     public_path = os.path.join(VAPID_DIR, "public_key.txt")
-
     if os.path.exists(private_path) and os.path.exists(public_path):
         with open(private_path, "rb") as f:
             private_key = f.read().decode()
@@ -64,6 +71,7 @@ def _load_vapid_keys():
             public_key = f.read().strip()
         return private_key, public_key
 
+    # 3) 自动生成（本地开发用）
     return _generate_vapid_keys()
 
 
