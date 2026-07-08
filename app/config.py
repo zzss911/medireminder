@@ -1,5 +1,12 @@
 """应用配置"""
 import os
+import tempfile
+from dotenv import load_dotenv
+
+# 加载 .env（仅本地开发，Vercel 用环境变量）
+load_dotenv()
+
+IS_VERCEL = os.environ.get("VERCEL") == "1"
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -8,12 +15,12 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://wchcfukrdmsymygplrkn.supa
 SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "sb_publishable_placeholder")
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
 
-# 仍然保留本地上传目录作为临时缓存
-UPLOAD_DIR = os.path.join(BASE_DIR, "uploads", "medicines")
-try:
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
-except OSError:
-    pass  # Vercel 只读文件系统
+# 上传目录：Vercel 用系统临时目录，本地用项目目录
+if IS_VERCEL:
+    UPLOAD_DIR = os.path.join(tempfile.gettempdir(), "medireminder-uploads")
+else:
+    UPLOAD_DIR = os.path.join(BASE_DIR, "uploads", "medicines")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # 允许的图片格式
 ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png", "webp", "bmp", "gif"}

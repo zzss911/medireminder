@@ -15,7 +15,10 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Optional
 
-from app.config import OCR_LANGUAGES, AI_PROVIDER, AI_API_KEY, AI_API_URL, QWEN_API_URL, QWEN_MODEL
+from app.config import (
+    OCR_LANGUAGES, AI_PROVIDER, AI_API_KEY, AI_API_URL,
+    QWEN_API_URL, QWEN_MODEL, IS_VERCEL,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -51,12 +54,6 @@ class EasyOCRBackend(AIBackend):
                 logger.warning("EasyOCR not installed, OCR disabled")
                 self._reader = False  # 标记为不可用
         return self._reader
-
-    def is_available(self) -> bool:
-        try:
-            return self.reader is not None and self.reader is not False
-        except:
-            return False
 
     def is_available(self) -> bool:
         try:
@@ -290,7 +287,15 @@ class VisionAPIBackend(AIBackend):
         """调用通义千问 Qwen-VL 视觉模型（兼容 OpenAI 格式）"""
         import httpx
 
-        url = self.api_url or f"{QWEN_API_URL}/chat/completions"
+        # 拼接 URL：如果已经是完整 chat completions 地址则直接用，否则补后缀
+        if self.api_url:
+            base = self.api_url.rstrip("/")
+        else:
+            base = QWEN_API_URL.rstrip("/")
+        if base.endswith("/chat/completions"):
+            url = base
+        else:
+            url = f"{base}/chat/completions"
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
@@ -367,7 +372,10 @@ class OCRService:
         global_provider = AI_PROVIDER
         global_api_key = AI_API_KEY
 
+        # EasyOCR 或 没有 AI key → 用本地 OCR
         if global_provider == "easyocr" or not global_api_key:
+            if IS_VERCEL:
+                raise Exception("EasyOCR 未安装（Vercel 不支持），请设置 AI_PROVIDER=qianwen 和 AI_API_KEY")
             return await self._easyocr.recognize(image_path)
 
         # 使用指定的 Vision API
@@ -386,20 +394,12 @@ class OCRService:
             if result.get("name"):
                 return result
             # 识别失败，附带错误信息
-            if "error" in result:
-                raise Exception(f"AI 识别失败: {result['error']}")
-            raise Exception(f"AI 返回空结果: {result.get('raw_text', '')[:200]}")
+            err_msg = result.get("error") or result.get("raw_text", "未知错误")
+            raise Exception(f"AI 识别失败: {str(err_msg)[:300]}")
         except Exception as e:
             logger.warning(f"Vision API failed: {e}")
-            # 不再静默回退到 EasyOCR（Vercel 上没装），把错误抛给上层
             raise
 
-    async def _call_qianwen_with_key_check(self, image_path: str) -> dict:
-        """便利方法 - 用于直接调用的临时调试"""
-        if not AI_API_KEY:
-            raise Exception("未配置千问 API Key (AI_API_KEY 环境变量)")
-        return await self._vision_backend.recognize(image_path)
 
 
 ocr_service = OCRService()
-

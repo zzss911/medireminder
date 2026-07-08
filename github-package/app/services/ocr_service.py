@@ -15,7 +15,10 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Optional
 
-from app.config import OCR_LANGUAGES, AI_PROVIDER, AI_API_KEY, AI_API_URL, QWEN_API_URL, QWEN_MODEL
+from app.config import (
+    OCR_LANGUAGES, AI_PROVIDER, AI_API_KEY, AI_API_URL,
+    QWEN_API_URL, QWEN_MODEL, IS_VERCEL,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -51,12 +54,6 @@ class EasyOCRBackend(AIBackend):
                 logger.warning("EasyOCR not installed, OCR disabled")
                 self._reader = False  # 标记为不可用
         return self._reader
-
-    def is_available(self) -> bool:
-        try:
-            return self.reader is not None and self.reader is not False
-        except:
-            return False
 
     def is_available(self) -> bool:
         try:
@@ -207,6 +204,8 @@ class VisionAPIBackend(AIBackend):
                 return await self._call_claude(image_data, mime_type)
             elif self.provider == "openai":
                 return await self._call_openai(image_data, mime_type)
+            elif self.provider == "qianwen":
+                return await self._call_qianwen(image_data, mime_type)
             else:
                 return {"name": "", "specification": "", "expiry_date": "",
                         "description": "", "raw_text": f"未知AI提供商: {self.provider}",
@@ -288,7 +287,15 @@ class VisionAPIBackend(AIBackend):
         """调用通义千问 Qwen-VL 视觉模型（兼容 OpenAI 格式）"""
         import httpx
 
-        url = self.api_url or f"{QWEN_API_URL}/chat/completions"
+        # 拼接 URL：如果已经是完整 chat completions 地址则直接用，否则补后缀
+        if self.api_url:
+            base = self.api_url.rstrip("/")
+        else:
+            base = QWEN_API_URL.rstrip("/")
+        if base.endswith("/chat/completions"):
+            url = base
+        else:
+            url = f"{base}/chat/completions"
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
@@ -310,8 +317,20 @@ class VisionAPIBackend(AIBackend):
 
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.post(url, json=payload, headers=headers)
-            resp.raise_for_status()
+            # 把 HTTP 错误正文也带回
+            if resp.status_code >= 400:
+                err_body = resp.text[:300]
+                return {"name": "", "specification": "", "expiry_date": "",
+                        "description": "", "raw_text": f"HTTP {resp.status_code}: {err_body}",
+                        "backend": self.provider, "error": f"HTTP {resp.status_code}"}
             data = resp.json()
+            # 千问错误返回格式: {"error": {"code": "...", "message": "..."}}
+            if "error" in data and "choices" not in data:
+                err_msg = data["error"].get("message", "未知错误")
+                err_code = data["error"].get("code", "")
+                return {"name": "", "specification": "", "expiry_date": "",
+                        "description": "", "raw_text": f"[{err_code}] {err_msg}",
+                        "backend": self.provider, "error": err_msg}
             text = data["choices"][0]["message"]["content"]
 
         return self._parse_json_response(text)
@@ -353,7 +372,10 @@ class OCRService:
         global_provider = AI_PROVIDER
         global_api_key = AI_API_KEY
 
+        # EasyOCR 或 没有 AI key → 用本地 OCR
         if global_provider == "easyocr" or not global_api_key:
+            if IS_VERCEL:
+                raise Exception("EasyOCR 未安装（Vercel 不支持），请设置 AI_PROVIDER=qianwen 和 AI_API_KEY")
             return await self._easyocr.recognize(image_path)
 
         # 使用指定的 Vision API
@@ -371,13 +393,13 @@ class OCRService:
             result = await self._vision_backend.recognize(image_path)
             if result.get("name"):
                 return result
+            # 识别失败，附带错误信息
+            err_msg = result.get("error") or result.get("raw_text", "未知错误")
+            raise Exception(f"AI 识别失败: {str(err_msg)[:300]}")
         except Exception as e:
-            logger.warning(f"Vision API failed, falling back to EasyOCR: {e}")
+            logger.warning(f"Vision API failed: {e}")
+            raise
 
-        # 回退到 EasyOCR
-        result = await self._easyocr.recognize(image_path)
-        result["backend"] = "easyocr (fallback)"
-        return result
 
 
 ocr_service = OCRService()

@@ -147,6 +147,25 @@ function setupUpload() {
                 return;
             }
 
+            // 检查 content-type，避免把 HTML/plaintext 当 JSON 解析
+            const contentType = res.headers.get('content-type') || '';
+            if (!res.ok) {
+                let errMsg = `服务器错误 (${res.status})`;
+                if (contentType.includes('application/json')) {
+                    const errJson = await res.json();
+                    errMsg = errJson.detail || errMsg;
+                } else {
+                    const errText = await res.text();
+                    // 提取纯文本错误（去除 HTML 标签）
+                    errMsg = errText.replace(/<[^>]*>/g, '').trim().substring(0, 200) || errMsg;
+                }
+                throw new Error(errMsg);
+            }
+
+            if (!contentType.includes('application/json')) {
+                throw new Error('服务器返回了非 JSON 格式');
+            }
+
             const result = await res.json();
             
             document.getElementById('ocr_name').value = result.name || '';

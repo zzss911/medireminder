@@ -79,7 +79,16 @@ async def upload_and_recognize(request: Request, file: UploadFile = File(...)):
         f.write(content)
 
     # AI 识别
-    result = await ocr_service.recognize(local_path)
+    try:
+        result = await ocr_service.recognize(local_path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"识别失败: {str(e)}")
+    finally:
+        # 识别完成后删除临时图片
+        try:
+            os.unlink(local_path)
+        except OSError:
+            pass
 
     return {
         "name": result.get("name", ""),

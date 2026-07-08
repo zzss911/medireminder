@@ -34,3 +34,5 @@ workbuddy-memory/
 
 # Uploads / local runtime files
 uploads/
+.vercel
+.db
